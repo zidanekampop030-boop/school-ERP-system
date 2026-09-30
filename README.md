@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # School ERP Microservices System (SEN4121 Exam Guide)
 
 This is a complete, containerized, multi-service School ERP system built for the **SEN4121: Large System Environment** 6-week practical examination. It implements 5 microservices orchestrated by Docker Compose, linked database configurations (3NF + Indexes), asynchronous message queuing, security mitigations, and performance tests.
@@ -215,3 +216,8 @@ If k6 is installed on your machine, you can run a load test against the API Gate
 k6 run k6-load-test.js
 ```
 This tests response speed and documents HTTP 429 requests generated when virtual users exceed the rate limit rules.
+=======
+# school-ERP-system
+A cloud-native, microservices-based Enterprise resource Planning system for a school
+practical examination
+>>>>>>> 134104f432fb4fb4cd5192be8745abb641afc238
