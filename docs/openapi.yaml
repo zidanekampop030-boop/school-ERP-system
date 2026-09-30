@@ -1,0 +1,349 @@
+openapi: 3.0.3
+info:
+  title: School ERP System API Specification
+  description: API documentation for the School ERP Microservices. Exposes endpoints for Authentication, Academic tracking, Invoice payments, and Staff payrolls.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api/v1
+    description: API Gateway server
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      description: Create a user account with hashed passwords and defined roles.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                  example: Jane Doe
+                email:
+                  type: string
+                  example: jane.doe@school.edu
+                password:
+                  type: string
+                  example: SecurePass123!
+                role:
+                  type: string
+                  enum: [Admin, Student, Staff]
+                  default: Student
+                  example: Student
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Bad request (missing fields or duplicate email)
+
+  /auth/login:
+    post:
+      summary: User Login
+      description: Authenticate credentials and receive a JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  example: jane.doe@school.edu
+                password:
+                  type: string
+                  example: SecurePass123!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                    description: Bearer JWT token
+                  user:
+                    type: object
+        '401':
+          description: Unauthorized (Invalid credentials)
+
+  /academic/students:
+    post:
+      summary: Create a Student Profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+              properties:
+                name:
+                  type: string
+                  example: Jane Doe
+                email:
+                  type: string
+                  example: jane.doe@school.edu
+      responses:
+        '201':
+          description: Student created
+
+    get:
+      summary: List all students
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+
+  /academic/courses:
+    post:
+      summary: Create a Course
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+                - title
+              properties:
+                code:
+                  type: string
+                  example: SEN4121
+                title:
+                  type: string
+                  example: Large System Environment
+                credits:
+                  type: integer
+                  example: 3
+      responses:
+        '201':
+          description: Course created
+
+  /academic/enroll:
+    post:
+      summary: Enroll a student in a course
+      description: Enrolls student. Emits message to RabbitMQ which auto-bills the student in finance-service.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - studentId
+                - courseId
+              properties:
+                studentId:
+                  type: string
+                  format: uuid
+                  example: d3b07384-d113-4956-a534-7d5a5d08dcd9
+                courseId:
+                  type: string
+                  format: uuid
+                  example: e6f28148-d3d6-4444-8c88-6625ea43ff12
+      responses:
+        '201':
+          description: Enrollment successful and message published
+
+  /academic/enrollments/{enrollmentId}/grade:
+    put:
+      summary: Grade a student enrollment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: enrollmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - grade
+              properties:
+                grade:
+                  type: string
+                  enum: [A, B, C, D, F]
+                  example: A
+      responses:
+        '200':
+          description: Grade updated successfully
+
+  /academic/students/{studentId}/transcript:
+    get:
+      summary: Get student grade transcript and GPA
+      description: BOLA security check active - students can only see their own transcript.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transcript data and cumulative GPA returned
+        '403':
+          description: BOLA violation (Forbidden)
+
+  /finance/student/{studentId}:
+    get:
+      summary: Get invoices of a student
+      description: BOLA check active - students can only see their own bills.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of invoices returned
+
+  /finance/{invoiceId}/pay:
+    post:
+      summary: Pay an invoice
+      description: Make a payment and generate receipt
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentMethod:
+                  type: string
+                  example: CREDIT_CARD
+                amountPaid:
+                  type: number
+                  example: 450.00
+      responses:
+        '200':
+          description: Payment successful, returns receipt
+
+  /hr/staff:
+    post:
+      summary: Add a new staff record
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+              properties:
+                name:
+                  type: string
+                  example: Professor Tanwi
+                email:
+                  type: string
+                  example: tanwi@school.edu
+                department:
+                  type: string
+                  example: Software Engineering
+                baseSalary:
+                  type: number
+                  example: 4800.00
+      responses:
+        '201':
+          description: Staff created
+
+  /hr/payroll/{staffId}/calculate:
+    post:
+      summary: Calculate payroll tax and net salary deductions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                month:
+                  type: string
+                  example: "2026-08"
+                otherDeductions:
+                  type: number
+                  example: 120.00
+      responses:
+        '201':
+          description: Payroll slip generated
+
+  /hr/payroll/{staffId}:
+    get:
+      summary: Get payroll slips of a staff member
+      description: BOLA check active - staff members can only view their own payroll records.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Returns staff payroll history
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

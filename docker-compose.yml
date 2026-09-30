@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  # Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: erp-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp-network
+
+  # Message Broker Service
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: erp-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp-network
+
+  # Authentication Microservice
+  auth-service:
+    build: ./auth-service
+    container_name: erp-auth-service
+    environment:
+      - PORT=5001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=erp_auth
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - JWT_SECRET=supersecretkey-auth
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - erp-network
+
+  # Academic Microservice
+  academic-service:
+    build: ./academic-service
+    container_name: erp-academic-service
+    environment:
+      - PORT=5002
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=erp_academic
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - JWT_SECRET=supersecretkey-auth
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    ports:
+      - "5002:5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - erp-network
+
+  # Finance Microservice
+  finance-service:
+    build: ./finance-service
+    container_name: erp-finance-service
+    environment:
+      - PORT=5003
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=erp_finance
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - JWT_SECRET=supersecretkey-auth
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    ports:
+      - "5003:5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - erp-network
+
+  # HR Microservice
+  hr-service:
+    build: ./hr-service
+    container_name: erp-hr-service
+    environment:
+      - PORT=5004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=erp_hr
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - JWT_SECRET=supersecretkey-auth
+    ports:
+      - "5004:5004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - erp-network
+
+  # Front API Gateway
+  api-gateway:
+    build: ./api-gateway
+    container_name: erp-api-gateway
+    environment:
+      - PORT=5000
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - ACADEMIC_SERVICE_URL=http://academic-service:5002
+      - FINANCE_SERVICE_URL=http://finance-service:5003
+      - HR_SERVICE_URL=http://hr-service:5004
+    ports:
+      - "5000:5000"
+    depends_on:
+      - auth-service
+      - academic-service
+      - finance-service
+      - hr-service
+    networks:
+      - erp-network
+
+volumes:
+  postgres-data:
+
+networks:
+  erp-network:
+    driver: bridge
